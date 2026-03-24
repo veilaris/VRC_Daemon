@@ -17,11 +17,12 @@
 ---
 
 <p align="center">
-  <img src="screenshots/3.png" width="49%" alt="Настройка сервисов" />
-  <img src="screenshots/1.png" width="49%" alt="Настройка компаньона" />
+  <img src="screenshots/companion.png" width="49%" alt="Компаньон" />
+  <img src="screenshots/services.png" width="49%" alt="Сервисы" />
 </p>
 <p align="center">
-  <img src="screenshots/2.png" width="70%" alt="Встроенный гайд" />
+  <img src="screenshots/moving.png" width="49%" alt="Движение" />
+  <img src="screenshots/guide.png" width="49%" alt="Гайд" />
 </p>
 
 ---
