@@ -43,7 +43,7 @@
 ## Установка
 
 ```bash
-git clone <url>
+git clone https://github.com/veilaris/VRC_Daemon
 cd "VRC Daemon"
 pip install -r requirements.txt
 copy config.example.json config.json
