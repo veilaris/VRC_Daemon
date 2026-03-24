@@ -1,0 +1,62 @@
+{
+  "ai_companion": {
+    "companion_name": "",
+    "personality": "",
+    "target_player": "",
+    "temperature": 0.7,
+    "max_history": 30,
+    "gender": "male"
+  },
+  "openrouter": {
+    "api_key": "",
+    "model": "openai/gpt-4.1",
+    "base_url": "https://openrouter.ai/api/v1"
+  },
+  "xtts": {
+    "provider": "xtts",
+    "server_url": "http://localhost:8020",
+    "endpoint": "/tts_to_audio",
+    "speaker_wav": "",
+    "language": "ru",
+    "temperature": 0.7
+  },
+  "elevenlabs": {
+    "api_key": "",
+    "voice_id": "",
+    "model": "eleven_flash_v2_5"
+  },
+  "whisper": {
+    "model": "base",
+    "language": "ru",
+    "device": "cpu"
+  },
+  "audio": {
+    "input_device": null,
+    "output_device": null,
+    "sample_rate": 16000,
+    "vad_threshold": 0.015,
+    "silence_duration": 0.8,
+    "pre_speech_buffer": 0.5
+  },
+  "screenshots": {
+    "enabled": true,
+    "monitor": 1
+  },
+  "osc": {
+    "host": "127.0.0.1",
+    "port": 9000,
+    "movement_enabled": true
+  },
+  "movement": {
+    "mode": "stay",
+    "tracker": "llm",
+    "model": "",
+    "model_look_at": "",
+    "model_follow": "",
+    "interval": 1.0,
+    "scan_turn_duration": 0.6,
+    "stop_distance": "close",
+    "appearance": "",
+    "dino_threshold": 0.4
+  }
+}

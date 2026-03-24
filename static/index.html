@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VRC Daemon</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header>
+  <h1><img src="/static/img/logo.png" alt="logo" class="header-logo" />VRC Daemon</h1>
+  <div id="status-indicator">
+    <div id="status-dot"></div>
+    <span id="status-text">Остановлен</span>
+  </div>
+  <button id="btn-toggle" class="btn btn-primary" onclick="toggleBot()">Запустить</button>
+</header>
+
+<!-- ===== Tabs ===== -->
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="companion">Компаньон</button>
+  <button class="tab-btn" data-tab="services">Сервисы</button>
+  <button class="tab-btn" data-tab="movement">Движение</button>
+  <button class="tab-btn" data-tab="memory">Память</button>
+  <button class="tab-btn" data-tab="console">Консоль</button>
+  <button class="tab-btn" data-tab="guide">Гайд</button>
+</nav>
+
+<!-- ===================================================================
+  Tab 1 — AI Companion
+==================================================================== -->
+<div class="tab-panel active" id="tab-companion">
+
+  <div class="card">
+    <h2>Персонаж бота</h2>
+    <div class="field">
+      <label for="companion_name">Имя компаньона</label>
+      <input type="text" id="companion_name" placeholder="Имя компаньона" style="max-width:220px" />
+    </div>
+    <div class="field">
+      <label>Пол персонажа</label>
+      <div class="gender-row">
+        <button class="btn-gender active" id="gender-btn-male" onclick="setGender('male')">
+          <img src="/static/img/man.jpg" alt="Мужской" />
+          <span>Мужской</span>
+        </button>
+        <button class="btn-gender" id="gender-btn-female" onclick="setGender('female')">
+          <img src="/static/img/woman.jpg" alt="Женский" />
+          <span>Женский</span>
+        </button>
+      </div>
+    </div>
+    <div class="field form-row single">
+      <label for="personality">Личность / характер</label>
+      <div class="preset-row">
+        <button class="btn-preset" onclick="applyPreset('friend')"   title="Тёплый и дружелюбный">🤝 Друг</button>
+        <button class="btn-preset" onclick="applyPreset('cynic')"    title="Саркастичный и недовольный">😒 Циник</button>
+        <button class="btn-preset" onclick="applyPreset('romantic')" title="Милый и флиртующий">💙 Романтик</button>
+        <button class="btn-preset" onclick="applyPreset('gopnik')"   title="Невоспитанный и неприятный (18+)">🥤 Грубиян</button>
+        <button class="btn-preset" onclick="applyPreset('custom')"   title="Описать личность бота самостоятельно">✏️ Кастомный</button>
+      </div>
+      <div id="personality-wrap" style="display:none">
+        <textarea id="personality" rows="5"
+          placeholder="Опиши характер, тон общения, примеры реплик..."></textarea>
+      </div>
+    </div>
+    <div class="field">
+      <label>Температура ответов: <span id="temp_val">0.7</span></label>
+      <div class="range-row">
+        <input type="range" id="temperature" min="0" max="1" step="0.05" value="0.7"
+          oninput="document.getElementById('temp_val').textContent = this.value" />
+      </div>
+      <span class="hint">Чем меньше температура — тем более предсказуемы ответы. Рекомендуется: 0.7</span>
+    </div>
+    <div class="field">
+      <label>Макс. сообщений в памяти: <span id="hist_val">20</span></label>
+      <div class="range-row">
+        <input type="range" id="max_history" min="4" max="300" step="2" value="20"
+          oninput="document.getElementById('hist_val').textContent = this.value" />
+      </div>
+      <span class="hint">Сколько последних сообщений (и своих, и игрока) бот будет помнить дословно.</span>
+    </div>
+  </div>
+
+  <div class="row-actions">
+    <button class="btn btn-primary" onclick="saveSettings()">Сохранить</button>
+    <span class="save-banner" id="save-banner-companion">Сохранено</span>
+  </div>
+</div>
+
+<!-- ===================================================================
+  Tab 2 — Services
+==================================================================== -->
+<div class="tab-panel" id="tab-services">
+
+  <!-- OpenRouter -->
+  <div class="card">
+    <h2>OpenRouter / LLM</h2>
+    <div class="form-row">
+      <div class="field">
+        <label for="or_apikey">API ключ</label>
+        <input type="password" id="or_apikey" placeholder="sk-or-v1-..." />
+        <span class="hint">Получить на openrouter.ai → Get API Key</span>
+      </div>
+      <div class="field">
+        <label for="or_model">Модель</label>
+        <input type="text" id="or_model" placeholder="google/gemini-2.0-flash-001" />
+        <span class="hint">Укажи любую модель из openrouter.ai/models. Рекомендуется: openai/gpt-4.1</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TTS -->
+  <div class="card">
+    <h2>Синтез речи (TTS)</h2>
+    <div class="field">
+      <label for="tts_provider">Провайдер</label>
+      <select id="tts_provider" onchange="updateTTSUI()">
+        <option value="xtts">Локальный XTTS — требует самостоятельной установки и настройки локального XTTS-сервера</option>
+        <option value="elevenlabs">ElevenLabs — облачный TTS (рекомендуется)</option>
+      </select>
+    </div>
+
+    <!-- XTTS fields -->
+    <div id="tts-xtts-fields">
+      <div class="form-row">
+        <div class="field">
+          <label for="xtts_url">URL сервера</label>
+          <input type="text" id="xtts_url" value="http://localhost:8020" />
+        </div>
+        <div class="field">
+          <label for="xtts_endpoint">Эндпоинт</label>
+          <input type="text" id="xtts_endpoint" value="/tts_to_audio/" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="xtts_speaker">Путь к WAV-файлу спикера</label>
+          <input type="text" id="xtts_speaker" placeholder="C:\XTTS\speakers\voice_sample.wav" />
+        </div>
+        <div class="field">
+          <label for="xtts_lang">Язык</label>
+          <select id="xtts_lang">
+            <option value="ru">ru — Русский</option>
+            <option value="en">en — English</option>
+            <option value="de">de — Deutsch</option>
+            <option value="fr">fr — Français</option>
+            <option value="es">es — Español</option>
+            <option value="zh-cn">zh-cn — 中文</option>
+            <option value="ja">ja — 日本語</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Температура TTS: <span id="xtts_temp_val">0.7</span></label>
+        <div class="range-row">
+          <input type="range" id="xtts_temperature" min="0.1" max="1" step="0.05" value="0.7"
+            oninput="document.getElementById('xtts_temp_val').textContent = this.value" />
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="testTTS()">Тест голоса</button>
+        <button class="btn btn-ghost btn-sm" onclick="fetchSpeakers()">Список спикеров</button>
+      </div>
+    </div>
+
+    <!-- ElevenLabs fields -->
+    <div id="tts-elevenlabs-fields" style="display:none">
+      <div class="form-row">
+        <div class="field">
+          <label for="el_apikey">API ключ</label>
+          <input type="password" id="el_apikey" placeholder="sk_..." />
+          <span class="hint">Получить на elevenlabs.io → Developers → API Keys</span>
+        </div>
+        <div class="field">
+          <label for="el_voice_id">Voice ID</label>
+          <input type="text" id="el_voice_id" placeholder="21m00Tcm4TlvDq8ikWAM" />
+          <span class="hint">elevenlabs.io → Voices → выбрать предпочитаемый голос → Copy Voice ID</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="el_model">Модель</label>
+        <select id="el_model">
+          <option value="eleven_flash_v2_5">eleven_flash_v2_5 — быстрая (рекомендуется)</option>
+          <option value="eleven_turbo_v2_5">eleven_turbo_v2_5 — быстрая, лучше качество</option>
+          <option value="eleven_multilingual_v2">eleven_multilingual_v2 — лучшее качество, медленнее</option>
+        </select>
+      </div>
+      <div class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="testTTS()">Тест голоса</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Whisper -->
+  <div class="card">
+    <h2>Whisper (распознавание речи)</h2>
+    <div class="form-row">
+      <div class="field">
+        <label for="w_model">Модель</label>
+        <select id="w_model">
+          <option value="tiny">tiny — быстро, менее точно</option>
+          <option value="base" selected>base — рекомендуется</option>
+          <option value="small">small</option>
+          <option value="medium">medium</option>
+          <option value="large-v3">large-v3 — медленно, точно</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="w_lang">Язык</label>
+        <select id="w_lang">
+          <option value="ru">ru — Русский</option>
+          <option value="en">en — English</option>
+          <option value="auto">auto — определять автоматически</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label for="w_device">Устройство вычислений</label>
+      <select id="w_device">
+        <option value="cpu">CPU (рекомендуется)</option>
+        <option value="cuda">CUDA (NVIDIA GPU)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Audio devices -->
+  <div class="card">
+    <h2>Аудиоустройства</h2>
+    <div class="form-row">
+      <div class="field">
+        <label for="audio_input">Вход (микрофон игрока)</label>
+        <select id="audio_input">
+          <option value="">По умолчанию</option>
+        </select>
+        <span class="hint">Выбери виртуальный микрофон, через который бот слышит твой голос. При использовании VoiceMeeter — «Voicemeeter Out B1».</span>
+      </div>
+      <div class="field">
+        <label for="audio_output">Выход (голос бота → VRChat)</label>
+        <select id="audio_output">
+          <option value="">По умолчанию</option>
+        </select>
+        <span class="hint">Выбери виртуальный микрофон VRChat, чтобы другие игроки слышали бота. При использовании VoiceMeeter — «Voicemeeter AUX Input».</span>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label>Порог VAD (чувствительность): <span id="vad_val">0.015</span></label>
+        <div class="range-row">
+          <input type="range" id="vad_threshold" min="0.001" max="0.05" step="0.001" value="0.015"
+            oninput="document.getElementById('vad_val').textContent = parseFloat(this.value).toFixed(3)" />
+        </div>
+        <span class="hint">Меньше = чувствительнее (слышит тихое), больше = игнорирует фон.</span>
+      </div>
+      <div class="field">
+        <label>Пауза для конца реплики (сек): <span id="sil_val">0.8</span></label>
+        <div class="range-row">
+          <input type="range" id="silence_duration" min="0.5" max="2" step="0.1" value="0.8"
+            oninput="document.getElementById('sil_val').textContent = parseFloat(this.value).toFixed(1)" />
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="refreshDevices()">Обновить устройства</button>
+  </div>
+
+  <!-- Screenshots -->
+  <div class="card">
+    <h2>Скриншоты</h2>
+    <div class="field">
+      <div class="toggle-row">
+        <span>Отправлять скриншот с каждым запросом к ИИ</span>
+        <label class="switch">
+          <input type="checkbox" id="screenshots_enabled" checked />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <span class="hint">Позволяет боту «видеть» окружающий мир.</span>
+    </div>
+    <div class="field">
+      <label for="monitor_num">Монитор</label>
+      <select id="monitor_num">
+        <option value="1">Монитор 1</option>
+        <option value="2">Монитор 2</option>
+        <option value="3">Монитор 3</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row-actions">
+    <button class="btn btn-primary" onclick="saveSettings()">Сохранить</button>
+    <span class="save-banner" id="save-banner-services">Сохранено</span>
+  </div>
+</div>
+
+<!-- ===================================================================
+  Tab 3 — Movement
+==================================================================== -->
+<div class="tab-panel" id="tab-movement">
+
+  <!-- Mode -->
+  <div class="card">
+    <h2>Режим движения</h2>
+    <div class="field">
+      <label for="movement_mode">Режим</label>
+      <select id="movement_mode" onchange="updateMovementUI()">
+        <option value="still" selected>Стоять на месте</option>
+        <option value="look_at">Смотреть на игрока</option>
+        <option value="follow">Следовать за игроком</option>
+      </select>
+      <span class="hint" id="movement_mode_hint"></span>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label for="movement_target">Ник целевого игрока</label>
+        <input type="text" id="movement_target" placeholder="PlayerName" />
+        <span class="hint">Используется во всех режимах кроме «Стоять на месте».</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Movement settings (look_at / follow only) -->
+  <div class="card" id="movement-auto-card">
+    <h2>Параметры движения</h2>
+
+    <div class="field">
+      <label for="movement_tracker">Метод поиска игрока</label>
+      <select id="movement_tracker" onchange="updateTrackerUI()">
+        <option value="llm">LLM Vision — движением управляет модель ИИ через скриншоты.</option>
+        <option value="grounding">Grounding DINO — локальная нейросеть, быстрее и без API-запросов (рекомендуется).</option>
+      </select>
+      <span class="hint">Grounding DINO бесплатна, намного быстрее, но менее точная и требует <b>NVIDIA GPU от 3 ГБ VRAM</b>. Нет видеокарты — выбирай LLM Vision.</span>
+    </div>
+
+    <!-- LLM fields -->
+    <div id="tracker-llm-fields">
+      <div class="form-row">
+        <div class="field">
+          <label for="movement_model_look_at">Модель для режима «Смотреть на игрока»</label>
+          <input type="text" id="movement_model_look_at" placeholder="google/gemini-2.0-flash-lite" />
+          <span class="hint">Только поиск игрока — можно выбрать более дешёвую модель. Рекомендуется: google/gemini-2.5-flash-lite</span>
+        </div>
+        <div class="field">
+          <label for="movement_model_follow">Модель для режима «Следовать за игроком»</label>
+          <input type="text" id="movement_model_follow" placeholder="google/gemini-2.5-flash-preview" />
+          <span class="hint">Нужно измерять рост — требует сильной vision-модели. Рекомендуется: google/gemini-3-flash-preview</span>
+        </div>
+      </div>
+      <div class="field" style="margin-top:4px">
+        <label>Оверлей сетки</label>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+          <button class="btn btn-ghost btn-sm" id="overlay-btn" onclick="toggleOverlay()">Включить оверлей</button>
+          <span class="hint" style="margin:0">Накладывает сетку поверх экрана — модель использует её для измерения позиции и дистанции до игрока.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Appearance (LLM + Grounding) -->
+    <div id="tracker-appearance-field">
+      <div class="field">
+        <label for="movement_appearance">Описание внешности аватара (на английском)</label>
+        <input type="text" id="movement_appearance"
+          placeholder="напр.: girl with blonde hair in camouflage pants and a black sweater" />
+        <span class="hint">При использовании Grounding DINO необходимо заполнить для корректного поиска игрока.</span>
+      </div>
+      <div class="field">
+        <label>Порог уверенности DINO: <span id="mv_dino_threshold_val">0.40</span></label>
+        <div class="range-row">
+          <input type="range" id="movement_dino_threshold" min="0.20" max="0.70" step="0.05" value="0.40"
+            oninput="document.getElementById('mv_dino_threshold_val').textContent = parseFloat(this.value).toFixed(2)" />
+        </div>
+        <span class="hint">Минимальная уверенность для распознавания игрока. Выше = меньше ложных срабатываний, но труднее найти издалека. Рекомендуется: 0.40</span>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:20px">
+      <label for="movement_stop_distance">Желаемое расстояние до игрока</label>
+      <select id="movement_stop_distance">
+        <option value="close" selected>Близко — аватар крупный, лицо хорошо видно</option>
+        <option value="far">Поодаль — виден весь аватар с пространством вокруг</option>
+      </select>
+      <span class="hint">Бот остановится когда приблизится до этой дистанции.</span>
+    </div>
+    <div class="field">
+      <label>Интервал сканирования (сек): <span id="mv_interval_val">1.0</span></label>
+      <div class="range-row">
+        <input type="range" id="movement_interval" min="0.3" max="7" step="0.1" value="2"
+          oninput="document.getElementById('mv_interval_val').textContent = (+this.value).toFixed(1)" />
+      </div>
+      <span class="hint">Как часто бот проверяет позицию игрока. Рекомендуется: для Grounding DINO — 0.5 с, для LLM — 2 с.</span>
+    </div>
+    <div class="field">
+      <label>Поворот при скане (сек): <span id="mv_scan_val">0.6</span></label>
+      <div class="range-row">
+        <input type="range" id="movement_scan_turn" min="0.2" max="1.5" step="0.1" value="0.6"
+          oninput="document.getElementById('mv_scan_val').textContent = parseFloat(this.value).toFixed(1)" />
+      </div>
+      <span class="hint">Длительность поворота за каждый шаг когда игрок не виден. Меньше = аккуратнее, больше = быстрее обнаружение. Рекомендуется: 0.3</span>
+    </div>
+  </div>
+
+  <!-- OSC -->
+  <div class="card">
+    <h2>OSC (VRChat)</h2>
+    <div class="form-row">
+      <div class="field">
+        <label for="osc_host">OSC хост</label>
+        <input type="text" id="osc_host" value="127.0.0.1" />
+      </div>
+      <div class="field">
+        <label for="osc_port">OSC порт</label>
+        <input type="number" id="osc_port" value="9000" min="1024" max="65535" />
+      </div>
+    </div>
+    <span class="hint">OSC должен быть включён в VRChat: Настройки → OSC → Enabled.</span>
+  </div>
+
+  <div class="row-actions">
+    <button class="btn btn-primary" onclick="saveSettings()">Сохранить</button>
+    <span class="save-banner" id="save-banner-movement">Сохранено</span>
+  </div>
+</div>
+
+<!-- ===================================================================
+  Tab 4 — Memory
+==================================================================== -->
+<div class="tab-panel" id="tab-memory">
+
+  <!-- Conversation history -->
+  <div class="card">
+    <div class="mem-header">
+      <h2>История диалога</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="loadMemoryTab()">Обновить</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearMemory(); setTimeout(loadMemoryTab,300)">Очистить всё</button>
+      </div>
+    </div>
+    <div id="mem-history"></div>
+  </div>
+
+  <!-- Long-term memory -->
+  <div class="card">
+    <div class="mem-header">
+      <h2>Долговременная память</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="loadLongTerm()">Обновить</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearLongTerm()">Очистить</button>
+      </div>
+    </div>
+    <textarea id="longterm-editor" rows="14" placeholder="Саммари прошлых сессий появятся здесь автоматически после остановки бота."></textarea>
+    <div class="row-actions" style="margin-top:8px;">
+      <button class="btn btn-primary" onclick="saveLongTerm()">Сохранить изменения</button>
+      <span class="save-banner" id="save-banner-longterm">Сохранено</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===================================================================
+  Tab 5 — Console
+==================================================================== -->
+<div class="tab-panel" id="tab-console">
+  <div class="card" style="margin-bottom:12px;">
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="clearMemory()">Очистить память диалога</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadHistory()">Загрузить историю</button>
+    </div>
+  </div>
+
+  <div id="chat-log">
+    <div class="msg msg-system">Лог диалога появится здесь после запуска бота.</div>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="text-input" placeholder="Написать боту (Enter — отправить)..."
+        style="flex:1;" onkeydown="if(event.key==='Enter') sendTextMessage()" />
+      <button class="btn btn-primary btn-sm" onclick="sendTextMessage()">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+  Tab 6 — Guide
+==================================================================== -->
+<div class="tab-panel" id="tab-guide">
+
+  <!-- Intro -->
+  <div class="card guide-card">
+    <div style="display:flex;align-items:center;gap:24px">
+      <div style="flex:1">
+        <p style="font-size:14px;line-height:1.9;margin:0">
+          <b>VRC Daemon</b> — AI-компаньон для VRChat, который живёт рядом с тобой в виртуальном мире.<br>
+          Он умеет разговаривать, двигаться, видеть что происходит вокруг и помнить тебя от сессии к сессии.<br>
+          Следует за тобой. Иногда в стену.<br><br>
+          Рекомендуем прочитать этот гайд до конца — здесь нет воды, только нужное.
+        </p>
+      </div>
+      <img src="/static/img/logo.png" style="height:140px;width:auto;opacity:0.85;flex-shrink:0">
+    </div>
+  </div>
+
+  <!-- TOC -->
+  <div class="card guide-card">
+    <h2 style="margin-bottom:14px">Оглавление</h2>
+    <div class="guide-toc">
+      <a href="#g-quickstart">1. Быстрый старт</a>
+      <div class="guide-toc-sub">
+        <a href="#g-prepare">1.1 Подготовка</a>
+        <div class="guide-toc-sub2">
+          <a href="#g-prepare-vrc">1.1.1 VRChat</a>
+          <a href="#g-prepare-vm">1.1.2 VoiceMeeter</a>
+        </div>
+        <a href="#g-apikeys">1.2 Получение API-ключей</a>
+        <a href="#g-personality">1.3 Настройка личности</a>
+        <a href="#g-speech">1.4 Настройка речи</a>
+        <div class="guide-toc-sub2">
+          <a href="#g-llm">1.4.1 LLM</a>
+          <a href="#g-tts">1.4.2 Синтез речи</a>
+          <a href="#g-whisper">1.4.3 Whisper</a>
+          <a href="#g-audio">1.4.4 Аудиоустройства</a>
+          <a href="#g-screens">1.4.5 Скриншоты</a>
+        </div>
+        <a href="#g-movement">1.5 Настройка движения</a>
+        <div class="guide-toc-sub2">
+          <a href="#g-modes">1.5.1 Режимы движения</a>
+          <a href="#g-moveparams">1.5.2 Параметры движения</a>
+        </div>
+        <a href="#g-memory">1.6 Память</a>
+        <a href="#g-console">1.7 Консоль</a>
+      </div>
+      <a href="#g-launch">2. Запуск</a>
+      <a href="#g-limits">3. Ограничения</a>
+      <a href="#g-commands">4. Голосовые команды</a>
+      <a href="#g-costs">5. Стоимость</a>
+    </div>
+  </div>
+
+  <!-- Section 1 -->
+  <div class="card guide-card" id="g-quickstart">
+    <h2>1. Быстрый старт</h2>
+    <p class="guide-intro">Пройди по шагам ниже — и через 10–15 минут компаньон будет готов к запуску.</p>
+
+    <!-- 1.1 -->
+    <div class="guide-section" id="g-prepare">
+      <div class="guide-section-title">1.1 Подготовка</div>
+
+      <div class="guide-subsection" id="g-prepare-vrc">
+        <div class="guide-subsection-title">1.1.1 VRChat</div>
+        <ol>
+          <li><b>Создай отдельный аккаунт VRChat</b> для компаньона.</li>
+          <li>Добавь своего персонажа в друзья компаньона.</li>
+          <li>Зайди в VRChat с аккаунта компаньона и поставь следующие настройки:
+            <ul>
+              <li><b>Настройки → Аватары → OSC</b> — включить. Это нужно, чтобы бот мог управлять движением аватара.</li>
+              <li><b>Настройки → Комфорт и безопасность → Тип домашнего инстанса</b> — поставить <b>«Друзья»</b>. Это позволит тебе телепортироваться к боту напрямую.</li>
+              <li><b>Настройки → Комфорт и безопасность → Безопасность</b> — отключить <b>«Подтверждать вход в порталы»</b>, иначе бот не сможет самостоятельно заходить в порталы.</li>
+              <li><b>Настройки → Звук и голос → Поведение микрофона</b> — установить на <b>«Всегда»</b>, иначе бот не будет говорить.</li>
+            </ul>
+          </li>
+          <li>Настрой громкость — отключи боту все посторонние звуки. Он должен слышать только <b>«Голоса»</b>.</li>
+        </ol>
+      </div>
+
+      <div class="guide-subsection" id="g-prepare-vm">
+        <div class="guide-subsection-title">1.1.2 VoiceMeeter</div>
+        <ol>
+          <li>Скачай и установи <b>VoiceMeeter Banana</b>: <a href="https://vb-audio.com/Voicemeeter/banana.htm" target="_blank">vb-audio.com/Voicemeeter/banana.htm</a> — перезагрузи ПК после установки.</li>
+          <li>Открой VoiceMeeter Banana и настрой маршрутизацию:
+            <ul>
+              <li>В каналах <b>Stereo Input 1, 2 и 3</b> — убедись что все кнопки <b>A1, A2, A3, B1, B2</b> выключены (не подсвечены)</li>
+              <li>На канале <b>Voicemeeter Input</b> — включи кнопку <b>B1</b></li>
+              <li>На канале <b>Voicemeeter AUX I</b> — включи кнопку <b>B2</b></li>
+            </ul>
+          </li>
+          <li>Настрой звук для VRChat в Windows (VRChat должен быть запущен): <b>Параметры → Система → Звук → Микшер громкости</b>. Найди <b>VRChat.exe</b> и выставь:
+            <ul>
+              <li>Устройство вывода → <b>Voicemeeter Input (VB-Audio Voicemeeter VAIO)</b></li>
+              <li>Устройство ввода → <b>Voicemeeter Out B2 (VB-Audio Voicemeeter VAIO)</b></li>
+            </ul>
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- 1.2 -->
+    <div class="guide-section" id="g-apikeys">
+      <div class="guide-section-title">1.2 Получение API-ключей</div>
+      <p style="margin-bottom:14px">Для работы компаньона понадобятся два API-ключа — <b>OpenRouter</b> и <b>ElevenLabs</b>. Ключи — это как пароль к сервису, поэтому храни их в надёжном месте. Если ключ был скомпрометирован — просто создай новый и удали старый.</p>
+
+      <div class="guide-subsection">
+        <div class="guide-subsection-title">OpenRouter</div>
+        <p style="margin-bottom:8px">Это агрегатор AI-моделей. Через него работает «мозг» компаньона и его зрение. Оплата за фактическое использование — без подписок.</p>
+        <ol>
+          <li>Зарегистрируйся на <a href="https://openrouter.ai" target="_blank">openrouter.ai</a></li>
+          <li>Пополни счёт: <b>Credits → Add credits</b> (минимум $5 — этого хватит на много часов общения)</li>
+          <li>Создай ключ: <b>API Keys → Create</b>, введи любое название</li>
+        </ol>
+      </div>
+
+      <div class="guide-subsection">
+        <div class="guide-subsection-title">ElevenLabs</div>
+        <p style="margin-bottom:8px">Озвучка ответов компаньона. Для доступа к API нужен платный план — рекомендуем начать с тарифа Starter за $5/мес.</p>
+        <ol>
+          <li>Зарегистрируйся на <a href="https://elevenlabs.io" target="_blank">elevenlabs.io</a></li>
+          <li>Оформи подписку <b>Starter</b> за $5/мес — без неё API не работает</li>
+          <li>Получи API-ключ: <b>Developers → API Keys → Create Key</b> — при создании обязательно включи доступ для <b>Text to Speech</b></li>
+          <li>Выбери голос: перейди в <b>Voices</b>, найди понравившийся голос и скопируй его <b>Voice ID</b> (<b>Copy voice ID</b>)</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- 1.3 -->
+    <div class="guide-section" id="g-personality">
+      <div class="guide-section-title">1.3 Настройка личности — вкладка «Компаньон»</div>
+      <ul>
+        <li><b>Имя</b> — как бот будет называть себя.</li>
+        <li><b>Пол</b> — влияет на грамматику («пошёл» / «пошла», «готов» / «готова»).</li>
+        <li><b>Личность</b> — выбери один из пресетов или «Кастомный» и опиши характер своими словами. Чем подробнее — тем интереснее поведение.</li>
+        <li><b>Температура</b> — непредсказуемость ответов. 0.7 — хороший баланс. Выше — более творчески, ниже — более предсказуемо.</li>
+        <li><b>Макс. сообщений в памяти</b> — сколько последних реплик бот будет помнить дословно. Больше = лучше память, но дороже.</li>
+      </ul>
+    </div>
+
+    <!-- 1.4 -->
+    <div class="guide-section" id="g-speech">
+      <div class="guide-section-title">1.4 Настройка речи — вкладка «Сервисы»</div>
+
+      <div class="guide-subsection" id="g-llm">
+        <div class="guide-subsection-title">1.4.1 LLM — языковая модель</div>
+        <p style="margin-bottom:8px">LLM — «мозг» компаньона. Именно она формулирует ответы, принимает решения и реагирует на происходящее. От выбора модели зависит качество общения и стоимость.</p>
+        <p style="margin-bottom:8px">Полный список доступных моделей — на <a href="https://openrouter.ai/models" target="_blank">openrouter.ai/models</a>. Для начала рекомендуем <code>openai/gpt-4.1</code> — хороший баланс качества и цены.</p>
+        <ul>
+          <li>Вставь API-ключ OpenRouter в поле <b>OpenRouter API Key</b></li>
+          <li>Введи название модели в поле <b>Модель</b></li>
+        </ul>
+      </div>
+
+      <div class="guide-subsection" id="g-tts">
+        <div class="guide-subsection-title">1.4.2 Синтез речи — ElevenLabs</div>
+        <p style="margin-bottom:8px">Голос компаньона. Выбери в ElevenLabs понравившийся голос, скопируй его Voice ID.</p>
+        <ul>
+          <li>Выбери провайдер <b>ElevenLabs</b></li>
+          <li>Вставь API-ключ и Voice ID</li>
+          <li>Рекомендуемая модель: <code>eleven_flash_v2_5</code> — быстрая и недорогая</li>
+        </ul>
+      </div>
+
+      <div class="guide-subsection" id="g-whisper">
+        <div class="guide-subsection-title">1.4.3 Whisper — распознавание твоей речи</div>
+        <p>Whisper преобразует твой голос в текст. Работает локально и бесплатно. Если не знаешь что это такое — просто оставь настройки по умолчанию, они уже подобраны оптимально.</p>
+      </div>
+
+      <div class="guide-subsection" id="g-audio">
+        <div class="guide-subsection-title">1.4.4 Аудиоустройства</div>
+        <p style="margin-bottom:8px">Убедись что VoiceMeeter уже установлен и настроен (см. <a href="#g-prepare-vm" class="guide-anchor-link">п. 1.1.2</a>), затем выставь:</p>
+        <ul>
+          <li><b>Вход (микрофон игрока)</b> → <b>Voicemeeter Out B1</b> — так бот слышит тебя</li>
+          <li><b>Выход (голос бота → VRChat)</b> → <b>Voicemeeter AUX Input</b> — так твой персонаж в VRChat слышит бота</li>
+          <li>Нажми <b>«Обновить устройства»</b> если нужные устройства не появились в списке</li>
+        </ul>
+        <p style="margin-top:8px;color:var(--text-dim);font-size:12px">Если не настроить — бот не будет тебя слышать или ты не будешь слышать бота.</p>
+      </div>
+
+      <div class="guide-subsection" id="g-screens">
+        <div class="guide-subsection-title">1.4.5 Скриншоты</div>
+        <p>Позволяют боту видеть что происходит на экране — он будет учитывать окружение в ответах. Рекомендуется оставить включённым.</p>
+      </div>
+    </div>
+
+    <!-- 1.5 -->
+    <div class="guide-section" id="g-movement">
+      <div class="guide-section-title">1.5 Настройка движения — вкладка «Движение»</div>
+
+      <div class="guide-subsection" id="g-modes">
+        <div class="guide-subsection-title">1.5.1 Режимы движения</div>
+        <p style="margin-bottom:8px">Бот поддерживает три режима. Режим можно менять в этом интерфейсе или голосовыми командами прямо в игре (см. <a href="#g-commands" class="guide-anchor-link">раздел 3</a>).</p>
+        <ul>
+          <li><b>Стоять на месте</b> — бот стоит и не шевелится, может только разговаривать</li>
+          <li><b>Смотреть на игрока</b> — бот стоит на месте, но разворачивается в твою сторону</li>
+          <li><b>Следовать за игроком</b> — бот старается идти за тобой на комфортной дистанции</li>
+        </ul>
+      </div>
+
+      <div class="guide-subsection" id="g-moveparams">
+        <div class="guide-subsection-title">1.5.2 Параметры движения (для режимов «Смотреть» и «Следовать»)</div>
+        <ul>
+          <li><b>Метод поиска</b> — способ, которым бот находит тебя на экране. <b>DINO</b> — нейросеть, работает локально и бесплатно, требует <b>NVIDIA GPU от 3 ГБ VRAM</b>. <b>LLM</b> — использует языковую модель, чуть точнее, но медленнее (2–3 сек на итерацию) и тратит токены. Нет NVIDIA видеокарты — выбирай LLM.<br>
+            <span style="color:var(--text-dim);font-size:12px">Если выбрал LLM — нажми кнопку <b>«Включить оверлей»</b> и растяни появившееся окно с сеткой поверх окна VRChat. Сетка попадает на скриншоты и помогает модели точнее определять позицию и дистанцию.</span></li>
+          <li><b>Ник целевого игрока</b> — введи свой ник в VRChat. Бот будет искать именно тебя.</li>
+          <li><b>Внешность аватара</b> — кратко опиши свой аватар на английском, чтобы бот знал как ты выглядишь.<br>
+            <span style="color:var(--text-dim);font-size:12px">Пример: <code>tall female avatar with white hair and blue dress</code></span></li>
+          <li><b>Порог уверенности DINO</b> — минимальный балл уверенности при котором DINO считает что нашёл тебя. По умолчанию 0.40. Если бот часто путает тебя с посторонними объектами — повысь до 0.50–0.55. Если не может найти тебя с расстояния — немного понизь.<br>
+            <span style="color:var(--text-dim);font-size:12px">Только для метода поиска Grounding DINO.</span></li>
+          <li><b>Интервал сканирования</b> — как часто бот «смотрит» в поисках тебя. Чем меньше значение, тем активнее поиск, но выше нагрузка.</li>
+          <li><b>Поворот при скане</b> — на сколько бот поворачивается влево-вправо во время поиска.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 1.6 -->
+    <div class="guide-section" id="g-memory">
+      <div class="guide-section-title">1.6 Память — вкладка «Память»</div>
+      <ul>
+        <li><b>История диалога</b> — последние N реплик текущей и прошлых сессий. Сохраняется между запусками. Можно очистить, если бот «застрял» в неудачном контексте.</li>
+        <li><b>Долговременная память</b> — после каждой сессии бот автоматически саммаризирует разговор и сохраняет итог. На следующем запуске он «вспомнит» что было раньше. Если что-то запомнил неверно — можно отредактировать вручную.</li>
+      </ul>
+    </div>
+
+    <!-- 1.7 -->
+    <div class="guide-section" id="g-console">
+      <div class="guide-section-title">1.7 Консоль — вкладка «Консоль»</div>
+      <ul>
+        <li>Отображает весь ход разговора в реальном времени.</li>
+        <li>Можно <b>написать боту текстом</b> прямо из интерфейса — удобно для настройки характера без запущенного VRChat и микрофона.</li>
+        <li>Кнопка «Загрузить историю» показывает историю текущей сессии.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- Section 2 — Launch -->
+  <div class="card guide-card" id="g-launch">
+    <h2>2. Запуск</h2>
+    <p style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">После того как все настройки заполнены, компаньон готов к работе. Вот правильный порядок действий:</p>
+    <ol>
+      <li>Запусти <b>VRChat</b> и войди с аккаунта компаньона.</li>
+      <li>Запусти <b>VoiceMeeter Banana</b>.</li>
+      <li>Нажми <b>«Запустить»</b> в этом интерфейсе. Кнопка находится справа сверху.</li>
+      <li>Сверни браузер — на мониторе должно быть видно именно окно VRChat. В идеале открой его на весь экран. Это важно: бот видит только то, что отображается на экране.</li>
+      <li>Зайди в VRChat со своего аккаунта. Найди компаньона в списке друзей, нажми <b>Присоединиться</b> — это телепортирует тебя к нему. Можно поставить портал в нужный мир и попросить бота войти в него — и вперёд.</li>
+    </ol>
+    <p style="margin-top:14px;font-size:13px"><b>Завершение сессии:</b> нажми <b>«Остановить»</b> в интерфейсе. Бот сохранит всё что произошло и вспомнит это при следующем запуске.</p>
+  </div>
+
+  <!-- Section 3 — Limitations -->
+  <div class="card guide-card" id="g-limits">
+    <h2>3. Ограничения</h2>
+    <ul>
+      <li>Бот предназначен для <b>приватных миров</b>. В публичных мирах с большим числом игроков он будет путаться в движении и невпопад реагировать на чужие голоса.</li>
+      <li>Бот <b>ищет игрока по изображению на экране</b> — он не знает о препятствиях и не видит то, что вне поля зрения камеры. Если бот застрял или бежит не туда — скажи <b>«развернись»</b>.</li>
+      <li>Распознавание речи зависит от качества микрофона и настроек VoiceMeeter. При сильном фоновом шуме возможны ложные срабатывания — в этом случае увеличь порог VAD в настройках.</li>
+    </ul>
+  </div>
+
+  <!-- Section 4 — Voice commands -->
+  <div class="card guide-card" id="g-commands">
+    <h2>4. Голосовые команды</h2>
+    <p class="guide-intro">Эти фразы бот выполняет <b>напрямую</b>, без обращения к ИИ — мгновенно и точно. Достаточно произнести одну из них вслух.</p>
+
+    <div class="cmd-table">
+      <div class="cmd-row-3 cmd-header">
+        <span>Что делает</span>
+        <span>Примеры фраз</span>
+        <span>Пояснение</span>
+      </div>
+      <div class="cmd-row-3">
+        <span class="cmd-label">Развернуться</span>
+        <span class="cmd-phrases">«развернись», «повернись», «разворот», «не туда»</span>
+        <span class="cmd-desc">Бот поворачивается на 180°. Помогает если он «смотрит в стену» или бежит не туда.</span>
+      </div>
+      <div class="cmd-row-3">
+        <span class="cmd-label">Следовать за мной</span>
+        <span class="cmd-phrases">«иди за мной», «следуй», «иди ко мне», «топай за мной»</span>
+        <span class="cmd-desc">Переключает режим на «Следовать за игроком». Бот начнёт идти за тобой.</span>
+      </div>
+      <div class="cmd-row-3">
+        <span class="cmd-label">Остановиться</span>
+        <span class="cmd-phrases">«стой», «стоп», «остановись», «замри», «не двигайся»</span>
+        <span class="cmd-desc">Переключает режим на «Стоять на месте». Бот замирает там где стоит.</span>
+      </div>
+      <div class="cmd-row-3">
+        <span class="cmd-label">Смотреть на меня</span>
+        <span class="cmd-phrases">«смотри на меня», «повернись ко мне», «смотри сюда»</span>
+        <span class="cmd-desc">Переключает режим на «Смотреть на игрока». Бот поворачивается к тебе, но не ходит.</span>
+      </div>
+      <div class="cmd-row-3">
+        <span class="cmd-label">Прыгнуть</span>
+        <span class="cmd-phrases">«прыгни», «прыгай», «прыжок»</span>
+        <span class="cmd-desc">Бот совершает один прыжок. При долгом движении вперёд иногда прыгает автоматически.</span>
+      </div>
+      <div class="cmd-row-3">
+        <span class="cmd-label">Посмотреть прямо</span>
+        <span class="cmd-phrases">«смотри прямо», «смотри вперёд», «голову прямо»</span>
+        <span class="cmd-desc">Выравнивает камеру — опускает до упора, потом поднимает на нужный угол. Помогает если камера «уехала» после сканирования.</span>
+      </div>
+      <div class="cmd-row-3">
+        <span class="cmd-label">Войти в портал</span>
+        <span class="cmd-phrases">«портал», «иди в портал», «зайди в портал», «в портал»</span>
+        <span class="cmd-desc">Бот ищет портал на экране и заходит в него. Работает через DINO или LLM Vision — зависит от выбранного метода поиска.</span>
+      </div>
+      <div class="cmd-row-3">
+        <span class="cmd-label">Открыть дверь</span>
+        <span class="cmd-phrases">«открой дверь», «открой», «войди», «зайди»</span>
+        <span class="cmd-desc">Бот сканирует область вокруг своей камеры в поисках синей рамки взаимодействия и кликает по ней.<br><b>Важно:</b> подойди своим персонажем вплотную к двери перед командой — бот ищет рамку в ближайшей зоне обзора.</span>
+      </div>
+    </div>
+
+    <p class="guide-note">Всё остальное бот передаёт в ИИ и отвечает своими словами согласно характеру.</p>
+  </div>
+
+  <!-- Section 5 — Costs -->
+  <div class="card guide-card" id="g-costs">
+    <h2>5. Стоимость</h2>
+    <p class="guide-intro">VRC Daemon, VRChat, Whisper и Grounding DINO — полностью бесплатны. Платными являются только внешние AI-сервисы.</p>
+
+    <div class="guide-subsection" style="margin-top:4px">
+      <div class="guide-subsection-title">Примерный расчёт: 10 сессий в месяц по 1 часу, ~30 реплик за сессию</div>
+      <p style="margin-bottom:12px;color:var(--text-dim);font-size:12px">Модель <code>openai/gpt-4.1</code> ($2/1M input, $10/1M output). Каждый запрос: системный промпт (400) + личность (600) + история и память (1000) + скриншот (1000) + реплика игрока (30) = <b>3030 токенов input</b>, ответ бота ≈ <b>60 токенов output</b>.</p>
+      <div class="cost-table">
+        <div class="cost-row cost-header"><span>Статья</span><span>За сессию</span><span>За месяц (10 сессий)</span></div>
+        <div class="cost-row"><span>OpenRouter — gpt-4.1<br><span style="color:var(--text-dim);font-size:11px">90.9K input + 1.8K output на сессию</span></span><span>~$0.20</span><span>~$2.00</span></div>
+        <div class="cost-row"><span>ElevenLabs — озвучка<br><span style="color:var(--text-dim);font-size:11px">30 реплик × 5 сек ≈ 2 250 символов</span></span><span>~$0.50</span><span>$5</span></div>
+        <div class="cost-row cost-total"><span><b>Итого</b></span><span><b>~$0.70</b></span><span><b>~$7</b></span></div>
+      </div>
+      <p style="margin-top:10px;color:var(--text-dim);font-size:12px">ElevenLabs — фиксированная подписка Starter $5/мес (30 000 символов). 10 сессий по 2 250 символов = 22 500 символов — в лимит укладывается.<br>
+      При использовании более дешёвых моделей (например <code>google/gemini-2.0-flash</code>) стоимость LLM снижается в 5–10 раз.</p>
+    </div>
+  </div>
+
+</div>
+
+<div style="text-align:center;padding:16px 0 8px;color:var(--text-dim);font-size:12px;line-height:1.8">
+  VRC Daemon © 2025 veilaris<br>
+  Код написан совместно с <a href="https://claude.ai" target="_blank" style="color:var(--text-dim);text-decoration:underline;text-decoration-color:var(--border)">Claude (Anthropic)</a>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
