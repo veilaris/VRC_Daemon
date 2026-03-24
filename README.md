@@ -16,6 +16,16 @@
 
 ---
 
+<p align="center">
+  <img src="screenshots/3.png" width="49%" alt="Настройка сервисов" />
+  <img src="screenshots/1.png" width="49%" alt="Настройка компаньона" />
+</p>
+<p align="center">
+  <img src="screenshots/2.png" width="70%" alt="Встроенный гайд" />
+</p>
+
+---
+
 ## Возможности
 
 - **Голосовой диалог** — распознаёт речь (Whisper), отвечает через LLM (OpenRouter), озвучивает ответ (XTTS / ElevenLabs)
