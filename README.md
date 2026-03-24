@@ -12,10 +12,6 @@
 
 ---
 
-> **Подробный гайд по настройке находится прямо в приложении** — открой `http://localhost:8080` и перейди на вкладку **«Гайд»**.
-
----
-
 <p align="center">
   <img src="screenshots/companion.png" width="49%" alt="Компаньон" />
   <img src="screenshots/services.png" width="49%" alt="Сервисы" />
@@ -68,6 +64,8 @@ python main.py
 > pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 > pip install groundingdino-py
 > ```
+
+> **Подробный гайд по настройке находится прямо в приложении** — открой `http://localhost:8080` и перейди на вкладку **«Гайд»**.
 
 ---
 
