@@ -350,78 +350,19 @@ class VRChatBot:
             return None
 
     def _enter_portal(self):
-        """Find the nearest portal and walk into it. Uses DINO or LLM based on tracker setting."""
-        tracker = self.config.get("movement", "tracker") or "llm"
-
-        def detect(screenshot: str) -> Optional[dict]:
-            if tracker == "grounding":
-                if self._grounding is None:
-                    try:
-                        from modules.grounding_tracker import GroundingTracker
-                        self._grounding = GroundingTracker(threshold=0.30)
-                    except Exception as e:
-                        print(f"[Bot] GroundingTracker load error: {e}", flush=True)
-                if not (self._grounding and self._grounding.available):
-                    return "unavailable"
-                return self._grounding.find_player(screenshot, cmd.PORTAL_DINO_QUERY)
-            else:
-                return self._detect_object_llm(screenshot, cmd.PORTAL_DINO_QUERY)
-
+        """Walk straight towards the player for 3.5s — player is always between bot and portal."""
         if self._movement_ctrl:
             self._movement_ctrl.paused = True
 
-        self._shortcut_reply("", cmd.REPLY["portal_searching"])
-
-        scan_streak = 0
-
         try:
-            for _ in range(15):
-                try:
-                    screenshot = self.vision.capture(max_width=0)
-                except Exception:
-                    self._shortcut_reply("", cmd.REPLY["error"])
-                    return
-                if not screenshot:
-                    self._shortcut_reply("", cmd.REPLY["error"])
-                    return
-
-                result = detect(screenshot)
-
-                if result == "unavailable":
-                    self._shortcut_reply("", cmd.REPLY["dino_unavailable"])
-                    return
-
-                if result is None:
-                    scan_streak += 1
-                    if scan_streak >= 7:
-                        self._shortcut_reply("", cmd.REPLY["portal_not_found"])
-                        return
-                    self.osc.execute_movement({"direction": "turn_right", "duration": 0.4})
-                    time.sleep(0.55)
-                    continue
-
-                scan_streak = 0
-                position = result["position"]
-                pct = result["pct"]
-                print(f"[Bot] Portal detected: position={position}, pct={pct}%", flush=True)
-
-                if position == "left":
-                    self.osc.execute_movement({"direction": "turn_left", "duration": 0.2})
-                    time.sleep(0.3)
-                elif position == "right":
-                    self.osc.execute_movement({"direction": "turn_right", "duration": 0.2})
-                    time.sleep(0.3)
-
-                dur = 2.0 if pct < 15 else (1.2 if pct < 30 else 0.5)
-                self.osc.execute_movement({"direction": "forward", "duration": dur})
-                time.sleep(dur + 0.2)
-
-                if pct >= 50:
-                    companion = self.config.get("ai_companion", "companion_name") or "Бот"
-                    self.log_watcher.session_events.append(
-                        f"[{time.strftime('%H:%M:%S')}] {companion} вошёл в портал"
-                    )
-                    return
+            self._shortcut_reply("", cmd.REPLY["portal_searching"])
+            duration = 3.5
+            self.osc.execute_movement({"direction": "forward", "duration": duration})
+            time.sleep(duration + 0.2)
+            companion = self.config.get("ai_companion", "companion_name") or "Бот"
+            self.log_watcher.session_events.append(
+                f"[{time.strftime('%H:%M:%S')}] {companion} вошёл в портал"
+            )
         finally:
             if self._movement_ctrl:
                 self._movement_ctrl.paused = False
